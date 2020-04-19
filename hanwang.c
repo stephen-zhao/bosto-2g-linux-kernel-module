@@ -45,6 +45,8 @@ enum hanwang_tablet_type {
 	HANWANG_ART_MASTER_III,
 	HANWANG_ART_MASTER_HD,
 	HANWANG_ART_MASTER_II,
+	HANWANG_BOSTO_22HD,
+	HANWANG_BOSTO_14WA,
 };
 
 struct hanwang {
@@ -82,6 +84,10 @@ static const struct hanwang_features features_array[] = {
 	{ 0x8401, "Hanwang Art Master HD 5012", HANWANG_ART_MASTER_HD,
 	  ART_MASTER_PKGLEN_MAX, 0x678e, 0x4150, 0x3f, 0x7f, 1024 },
 	{ 0x8503, "Hanwang Art Master II", HANWANG_ART_MASTER_II,
+	  ART_MASTER_PKGLEN_MAX, 0x27de, 0x1cfe, 0x3f, 0x7f, 1024 },
+	{ 0x9016, "Hanwang Bosto 22HD", HANWANG_BOSTO_22HD,
+	  ART_MASTER_PKGLEN_MAX, 0x27de, 0x1cfe, 0x3f, 0x7f, 1024 },
+	{ 0x9018, "Hanwang Bosto 14WA", HANWANG_BOSTO_14WA,
 	  ART_MASTER_PKGLEN_MAX, 0x27de, 0x1cfe, 0x3f, 0x7f, 1024 },
 };
 
@@ -169,6 +175,8 @@ static void hanwang_parse_packet(struct hanwang *hanwang)
 
 			case HANWANG_ART_MASTER_HD:
 			case HANWANG_ART_MASTER_II:
+			case HANWANG_BOSTO_22HD:
+			case HANWANG_BOSTO_14WA:
 				p = (data[7] >> 6) | (data[6] << 2);
 				break;
 
@@ -216,6 +224,8 @@ static void hanwang_parse_packet(struct hanwang *hanwang)
 			break;
 
 		case HANWANG_ART_MASTER_HD:
+		case HANWANG_BOSTO_22HD:
+		case HANWANG_BOSTO_14WA:
 			input_report_key(input_dev, BTN_TOOL_FINGER, data[1] ||
 					data[2] || data[3] || data[4] ||
 					data[5] || data[6]);
