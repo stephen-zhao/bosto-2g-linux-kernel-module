@@ -17,4 +17,5 @@ clean:
 install:
 	make -C /lib/modules/$(shell uname -r)/build M=$(shell pwd) modules_install
 	install -m 0755 bosto-usb-detach /usr/local/bin/
+	install -m 0755 load_hanwang.sh /usr/local/bin/
 	install -m 0644 hanwang.rules /etc/udev/rules.d/70-hanwang.rules
