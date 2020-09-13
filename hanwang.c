@@ -18,12 +18,14 @@ MODULE_AUTHOR("Xing Wei <weixing@hanwang.com.cn>");
 MODULE_DESCRIPTION("USB Hanwang tablet driver");
 MODULE_LICENSE("GPL");
 
+#define USB_VENDOR_ID_WINMAXGROUP   0x0ed1
 #define USB_VENDOR_ID_HANWANG		0x0b57
 #define HANWANG_TABLET_INT_CLASS	0x0003
 #define HANWANG_TABLET_INT_SUB_CLASS	0x0001
 #define HANWANG_TABLET_INT_PROTOCOL	0x0002
 
 #define ART_MASTER_PKGLEN_MAX	10
+#define BOSTO_16HD_PKGLEN_MAX	8
 
 /* device IDs */
 #define STYLUS_DEVICE_ID	0x02
@@ -47,6 +49,7 @@ enum hanwang_tablet_type {
 	HANWANG_ART_MASTER_II,
 	HANWANG_BOSTO_22HD,
 	HANWANG_BOSTO_14WA,
+	HANWANG_BOSTO_16HD,
 };
 
 struct hanwang {
@@ -89,6 +92,8 @@ static const struct hanwang_features features_array[] = {
 	  ART_MASTER_PKGLEN_MAX, 0x27de, 0x1cfe, 0x3f, 0x7f, 1024 },
 	{ 0x9018, "Hanwang Bosto 14WA", HANWANG_BOSTO_14WA,
 	  ART_MASTER_PKGLEN_MAX, 0x27de, 0x1cfe, 0x3f, 0x7f, 1024 },
+	{ 0x7821, "Hanwang Bosto 16HD", HANWANG_BOSTO_16HD,
+	  BOSTO_16HD_PKGLEN_MAX, 0x45fe, 0x27fe, -1, -1, 0x2000 },
 };
 
 static const int hw_eventtypes[] = {
@@ -117,6 +122,7 @@ static void hanwang_parse_packet(struct hanwang *hanwang)
 	struct usb_device *dev = hanwang->usbdev;
 	enum hanwang_tablet_type type = hanwang->features->type;
 	int i;
+	int ii;
 	u16 p;
 
 	if (type == HANWANG_ART_MASTER_II) {
@@ -124,7 +130,57 @@ static void hanwang_parse_packet(struct hanwang *hanwang)
 		hanwang->current_id = STYLUS_DEVICE_ID;
 	}
 
+	if (type == HANWANG_BOSTO_16HD)
+	{
+		char data_debug_str[120];
+		sprintf(data_debug_str, "%s Received data: ", __func__);
+       	for (ii = 0; ii < BOSTO_16HD_PKGLEN_MAX; ++ii)
+		{
+			sprintf(data_debug_str + strlen(data_debug_str), "%02x ", data[ii]);
+		}
+		dev_dbg(&dev->dev, "%s\n", data_debug_str);
+	}
+
 	switch (data[0]) {
+	case 0x01:  /* Bosto 16HD data packet */
+		switch (type) {
+		case HANWANG_BOSTO_16HD:
+			p = le16_to_cpup((__le16 *)&data[2]);
+			dev_dbg(&dev->dev, "ABS_X = %5d (0x%04x)", p, p);
+			input_report_abs(input_dev, ABS_X, p);
+
+			p = le16_to_cpup((__le16 *)&data[4]);
+			dev_dbg(&dev->dev, "ABS_Y = %5d (0x%04x)", p, p);
+			input_report_abs(input_dev, ABS_Y, p);
+
+			p = le16_to_cpup((__le16 *)&data[6]);
+			dev_dbg(&dev->dev, "ABS_PRESSURE = %5d (0x%04x)", p, p);
+			input_report_abs(input_dev, ABS_PRESSURE, p);
+
+			p = data[1] & 0x02;
+			if (p) dev_dbg(&dev->dev, "BTN_STYLUS");
+			input_report_key(input_dev, BTN_STYLUS, p);
+
+			p = data[1] & 0x20;
+			if (p) dev_dbg(&dev->dev, "BTN_STYLUS2");
+			input_report_key(input_dev, BTN_STYLUS2, p);
+
+			input_report_key(input_dev, BTN_TOOL_PEN, 1);
+
+			break;
+
+		default:
+			dev_dbg(&dev->dev, "error packet  %02x\n", data[0]);
+			break;
+
+		}
+
+		input_report_abs(input_dev, ABS_MISC, hanwang->current_id);
+		input_event(input_dev, EV_MSC, MSC_SERIAL,
+				hanwang->features->pid);
+		
+		break;
+
 	case 0x02:	/* data packet */
 		switch (data[1]) {
 		case 0x80:	/* tool prox out */
@@ -243,6 +299,7 @@ static void hanwang_parse_packet(struct hanwang *hanwang)
 			break;
 
 		case HANWANG_ART_MASTER_II:
+		default:
 			dev_dbg(&dev->dev, "error packet  %02x\n", data[0]);
 			return;
 		}
@@ -393,10 +450,12 @@ static int hanwang_probe(struct usb_interface *intf, const struct usb_device_id 
 			     0, hanwang->features->max_x, 4, 0);
 	input_set_abs_params(input_dev, ABS_Y,
 			     0, hanwang->features->max_y, 4, 0);
-	input_set_abs_params(input_dev, ABS_TILT_X,
-			     0, hanwang->features->max_tilt_x, 0, 0);
-	input_set_abs_params(input_dev, ABS_TILT_Y,
-			     0, hanwang->features->max_tilt_y, 0, 0);
+	if (hanwang->features->max_tilt_x > 0)
+		input_set_abs_params(input_dev, ABS_TILT_X,
+					0, hanwang->features->max_tilt_x, 0, 0);
+	if (hanwang->features->max_tilt_y > 0)
+		input_set_abs_params(input_dev, ABS_TILT_Y,
+					0, hanwang->features->max_tilt_y, 0, 0);
 	input_set_abs_params(input_dev, ABS_PRESSURE,
 			     0, hanwang->features->max_pressure, 0, 0);
 
@@ -408,9 +467,18 @@ static int hanwang_probe(struct usb_interface *intf, const struct usb_device_id 
 	hanwang->irq->transfer_dma = hanwang->data_dma;
 	hanwang->irq->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
+	dev_dbg(&dev->dev,
+		"%s - Registering hanwang usb device...",
+		__func__);
+
 	error = input_register_device(hanwang->dev);
 	if (error)
+	{
+		dev_err(&dev->dev,
+			"%s - Error registering hanwang usb device: %d",
+			__func__, error);
 		goto fail3;
+	}
 
 	usb_set_intfdata(intf, hanwang);
 
@@ -440,6 +508,8 @@ static void hanwang_disconnect(struct usb_interface *intf)
 
 static const struct usb_device_id hanwang_ids[] = {
 	{ HANWANG_TABLET_DEVICE(USB_VENDOR_ID_HANWANG, HANWANG_TABLET_INT_CLASS,
+		HANWANG_TABLET_INT_SUB_CLASS, HANWANG_TABLET_INT_PROTOCOL) },
+	{ HANWANG_TABLET_DEVICE(USB_VENDOR_ID_WINMAXGROUP, HANWANG_TABLET_INT_CLASS,
 		HANWANG_TABLET_INT_SUB_CLASS, HANWANG_TABLET_INT_PROTOCOL) },
 	{}
 };
