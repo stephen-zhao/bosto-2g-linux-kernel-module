@@ -1,2 +1,15 @@
+*.ko
+*.ko.cmd
+*.mod
+*.mod.c
+*.mod.cmd
+*.mod.o.cmd
 *.o
 *.o.d
+*.o.cmd
+
+bosto-usb-detach
+Module.symvers
+modules.order
+
+*.code-workspace
