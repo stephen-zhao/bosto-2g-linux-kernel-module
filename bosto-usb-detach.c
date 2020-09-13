@@ -14,7 +14,7 @@ int main()
 	 * intending to allow multiple devices, you
 	 * might need to use libusb_get_device_list() instead. Refer to the libusb
 	 * documentation for details. */
-	handle = libusb_open_device_with_vid_pid(0, 0x0b57, 0x9016);
+	handle = libusb_open_device_with_vid_pid(0, 0x0ed1, 0x7821);
 	if (!handle) {
 		printf("Unable to open device.\n");
 		return 1;
